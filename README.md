@@ -31,4 +31,9 @@ To run this project, you need to have the following requirements installed:
 
 ## Detail Explaination
 
+<<<<<<< HEAD
 A comprehensive video tutorial explaining the project code can be found at: https://youtu.be/neBZ6huolkg?si=mtayYBTuq7PBYd5Q
+=======
+A comprehensive video tutorial explaining the project code can be found at: 
+https://youtu.be/neBZ6huolkg?si=mtayYBTuq7PBYd5Q
+>>>>>>> d054d31ed84ebda4c869b79d1eb5a421362ff1de
