@@ -3,14 +3,17 @@ import cv2
 
 class ViewTransformer():
     def __init__(self):
+        # Define the court dimensions in meters
         court_width = 68
         court_length = 23.32
 
+        # Define the pixel coordinates of the four corners of the court in the original image
         self.pixel_vertices = np.array([[110, 1035], 
                                [265, 275], 
                                [910, 260], 
                                [1640, 915]])
         
+        # Define the target coordinates of the four corners of the court in the transformed image
         self.target_vertices = np.array([
             [0,court_width],
             [0, 0],
@@ -21,14 +24,17 @@ class ViewTransformer():
         self.pixel_vertices = self.pixel_vertices.astype(np.float32)
         self.target_vertices = self.target_vertices.astype(np.float32)
 
+        # Calculate the perspective transformation matrix
         self.persepctive_trasnformer = cv2.getPerspectiveTransform(self.pixel_vertices, self.target_vertices)
 
     def transform_point(self,point):
+        # Check if the point is inside the court
         p = (int(point[0]),int(point[1]))
         is_inside = cv2.pointPolygonTest(self.pixel_vertices,p,False) >= 0 
         if not is_inside:
             return None
 
+        # Reshape the point and transform it
         reshaped_point = point.reshape(-1,1,2).astype(np.float32)
         tranform_point = cv2.perspectiveTransform(reshaped_point,self.persepctive_trasnformer)
         return tranform_point.reshape(-1,2)

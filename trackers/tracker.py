@@ -12,7 +12,7 @@ from utils import get_center_of_bbox, get_bbox_width, get_foot_position
 class Tracker:
     def __init__(self, model_path):
         self.model = YOLO(model_path) 
-        self.tracker = sv.ByteTrack()
+        self.tracker = sv.ByteTrack() # Creates a ByteTrack tracker for object tracking
 
     def add_position_to_tracks(sekf,tracks):
         for object, object_tracks in tracks.items():
@@ -26,14 +26,14 @@ class Tracker:
                     tracks[object][frame_num][track_id]['position'] = position
 
     def interpolate_ball_positions(self,ball_positions):
-        ball_positions = [x.get(1,{}).get('bbox',[]) for x in ball_positions]
-        df_ball_positions = pd.DataFrame(ball_positions,columns=['x1','y1','x2','y2'])
+        ball_positions = [x.get(1,{}).get('bbox',[]) for x in ball_positions] # Extracts bounding boxes from ball positions
+        df_ball_positions = pd.DataFrame(ball_positions,columns=['x1','y1','x2','y2']) # Creates a DataFrame from the bounding boxes
 
-        # Interpolate missing values
+        # Interpolate missing values using linear interpolation and backfilling
         df_ball_positions = df_ball_positions.interpolate()
         df_ball_positions = df_ball_positions.bfill()
 
-        ball_positions = [{1: {"bbox":x}} for x in df_ball_positions.to_numpy().tolist()]
+        ball_positions = [{1: {"bbox":x}} for x in df_ball_positions.to_numpy().tolist()] # Converts interpolated DataFrame back to list format
 
         return ball_positions
 
@@ -46,12 +46,14 @@ class Tracker:
         return detections
 
     def get_object_tracks(self, frames, read_from_stub=False, stub_path=None):
-        
+
+        # Read tracks from stub file if available
         if read_from_stub and stub_path is not None and os.path.exists(stub_path):
             with open(stub_path,'rb') as f:
                 tracks = pickle.load(f)
             return tracks
 
+        # Detect objects in the frames if not reading from stub
         detections = self.detect_frames(frames)
 
         tracks={
@@ -61,20 +63,22 @@ class Tracker:
         }
 
         for frame_num, detection in enumerate(detections):
+            # Get class names and their inverse mapping
             cls_names = detection.names
             cls_names_inv = {v:k for k,v in cls_names.items()}
 
             # Covert to supervision Detection format
             detection_supervision = sv.Detections.from_ultralytics(detection)
 
-            # Convert GoalKeeper to player object
+            # Convert "GoalKeeper" to "Player" object
             for object_ind , class_id in enumerate(detection_supervision.class_id):
                 if cls_names[class_id] == "goalkeeper":
                     detection_supervision.class_id[object_ind] = cls_names_inv["player"]
 
-            # Track Objects
+            # Track objects using the ByteTrack tracker
             detection_with_tracks = self.tracker.update_with_detections(detection_supervision)
 
+            # Initialize empty lists and adding tracked objects to the corresponding lists
             tracks["players"].append({})
             tracks["referees"].append({})
             tracks["ball"].append({})
@@ -97,6 +101,7 @@ class Tracker:
                 if cls_id == cls_names_inv['ball']:
                     tracks["ball"][frame_num][1] = {"bbox":bbox}
 
+        # Save tracks to a stub file if specified
         if stub_path is not None:
             with open(stub_path,'wb') as f:
                 pickle.dump(tracks,f)
@@ -104,10 +109,15 @@ class Tracker:
         return tracks
     
     def draw_ellipse(self,frame,bbox,color,track_id=None):
+
+        # Calculate the bottom y-coordinate and center x-coordinate of the bounding box
         y2 = int(bbox[3])
         x_center, _ = get_center_of_bbox(bbox)
+
+        # Get the width of the bounding box
         width = get_bbox_width(bbox)
 
+        # Draw the ellipse on the frame
         cv2.ellipse(
             frame,
             center=(x_center,y2),
@@ -120,6 +130,7 @@ class Tracker:
             lineType=cv2.LINE_4
         )
 
+        # Calculate the dimensions and position of the rectangle for the track ID
         rectangle_width = 40
         rectangle_height=20
         x1_rect = x_center - rectangle_width//2
@@ -127,6 +138,7 @@ class Tracker:
         y1_rect = (y2- rectangle_height//2) +15
         y2_rect = (y2+ rectangle_height//2) +15
 
+        # Draw the rectangle and text for the track ID if provided
         if track_id is not None:
             cv2.rectangle(frame,
                           (int(x1_rect),int(y1_rect) ),
@@ -153,7 +165,8 @@ class Tracker:
     def draw_traingle(self,frame,bbox,color):
         y= int(bbox[1])
         x,_ = get_center_of_bbox(bbox)
-
+    
+        # Define the triangle points
         triangle_points = np.array([
             [x,y],
             [x-10,y-20],
@@ -171,13 +184,14 @@ class Tracker:
         alpha = 0.4
         cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
+        # Calculate team ball control percentages
         team_ball_control_till_frame = team_ball_control[:frame_num+1]
-        # Get the number of time each team had ball control
         team_1_num_frames = team_ball_control_till_frame[team_ball_control_till_frame==1].shape[0]
         team_2_num_frames = team_ball_control_till_frame[team_ball_control_till_frame==2].shape[0]
         team_1 = team_1_num_frames/(team_1_num_frames+team_2_num_frames)
         team_2 = team_2_num_frames/(team_1_num_frames+team_2_num_frames)
 
+        # Draw the team ball control percentages on the frame
         cv2.putText(frame, f"Team 1 Ball Control: {team_1*100:.2f}%",(1400,900), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 3)
         cv2.putText(frame, f"Team 2 Ball Control: {team_2*100:.2f}%",(1400,950), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 3)
 
